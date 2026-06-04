@@ -1,0 +1,19 @@
+{-
+    froid.app.Activity — the Activity an app subclasses.
+
+    An app module writes `native module type Activity where {}` (its generated
+    class then extends froid.app.FregeActivity) and a plain
+    `onCreate :: Activity -> IO ()`. No native-module Java in app code — the base
+    class (froid.app.FregeActivity, plain Java in the library) does the bridging.
+-}
+module froid.app.Activity where
+
+import froid.content.Context
+import froid.view.View
+
+data Activity = pure native "froid.app.FregeActivity"
+
+native getApplicationContext :: Activity -> IO Context
+native setContentView        :: Activity -> View -> IO ()
+native setTitle              :: Activity -> String -> IO ()
+native finish                :: Activity -> IO ()

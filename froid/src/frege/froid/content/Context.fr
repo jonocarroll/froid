@@ -1,0 +1,4 @@
+module froid.content.Context where
+
+data ContextN = native "RealWorld android.content.Context"
+type Context = MutableIO ContextN

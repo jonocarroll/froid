@@ -1,0 +1,57 @@
+module app.GeoQuiz where
+
+import froid.app.Activity
+import froid.ui.App
+import froid.frp.Signal
+
+native module type Activity where {}
+
+onCreate :: Activity -> IO ()
+onCreate this = runApp this geoQuiz
+
+geoQuiz :: App Model Msg
+geoQuiz = App { initial = Model { idx = 0, feedback = Unanswered }, update = update, view = view }
+
+data Question = Question { prompt :: String, answer :: Bool }
+
+questions :: [Question]
+questions =
+    [ Question { prompt = "The Pacific is the largest ocean",         answer = true  }
+    , Question { prompt = "The Nile flows through South America",     answer = false }
+    , Question { prompt = "Mount Everest is the tallest mountain",    answer = true  }
+    , Question { prompt = "The capital of Australia is Sydney",       answer = false }
+    , Question { prompt = "Lake Baikal is the deepest lake on Earth", answer = true  }
+    ]
+
+data Feedback = Unanswered | Correct | Wrong
+data Model    = Model { idx :: Int, feedback :: Feedback }
+data Msg      = Answer Bool | Move Int
+
+current :: Model -> Question
+current m = questions !! m.idx
+
+wrap :: Int -> Int -> Int
+wrap i n = ((i `mod` n) + n) `mod` n
+
+feedbackStyle :: Feedback -> (String, String)
+feedbackStyle Unanswered = ("",         "#FFFFFF")
+feedbackStyle Correct    = ("Correct!", "#1B5E20")
+feedbackStyle Wrong      = ("Wrong!",   "#B71C1C")
+
+update :: Msg -> Model -> Model
+update (Answer guess) m =
+    m.{ feedback = if guess == (current m).answer then Correct else Wrong }
+update (Move d) m =
+    m.{ idx = wrap (m.idx + d) (length questions), feedback = Unanswered }
+
+view :: Signal Model -> Ui Msg
+view model = column
+    [ flexSpacer
+    , headline       (fmap (\m -> (current m).prompt) model)
+    , gap 16
+    , dynColoredText (fmap (\m -> feedbackStyle m.feedback) model)
+    , gap 32
+    , row [ primaryButton "True" (Answer true), primaryButton "False" (Answer false) ]
+    , flexSpacer
+    , row [ flatButton "Prev" (Move (-1)),      flatButton "Next" (Move 1) ]
+    ]

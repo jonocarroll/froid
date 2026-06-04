@@ -1,0 +1,70 @@
+{-
+    froid.ui.Widget — a small, Compose-like declarative UI layer, built on the
+    Android View system and driven by froid's FRP (froid.frp.Signal).
+
+    A `Widget` is a recipe that, given a Context, materialises a View. Static
+    content is a plain value; reactive content is a `Signal`; user input (a
+    button press) is an `Event`. You compose widgets with `column`/`row`, and
+    the runtime keeps views in sync with their signals — no manual findViewById,
+    no Kotlin, no Jetpack Compose.
+-}
+module froid.ui.Widget where
+
+import froid.frp.Signal
+import froid.app.Activity
+import froid.view.View
+import froid.content.Context
+import froid.widget.Widgets
+
+--- A recipe that builds a View under a Context.
+type Widget = Context -> IO View
+
+--- Build a widget and install it as the activity's content view.
+render :: Activity -> Widget -> IO ()
+render activity widget = do
+    ctx  <- getApplicationContext activity
+    view <- widget ctx
+    setContentView activity view
+
+--- Static text.
+label :: String -> Widget
+label s ctx = do
+    tv <- newTextView ctx
+    setText tv s
+    textViewAsView tv
+
+--- Text bound to a Signal: updates whenever the signal changes.
+dynLabel :: Signal String -> Widget
+dynLabel sig ctx = do
+    tv <- newTextView ctx
+    react sig (setText tv)
+    textViewAsView tv
+
+--- A button labelled `lbl`. Returns the widget plus an Event that fires on each
+--- press — wire it into a Signal with `accumS`.
+button :: String -> IO (Widget, Event ())
+button lbl = do
+    (clicks, fire) <- newEvent
+    let build ctx = do
+            b  <- newButton ctx
+            setText b lbl
+            bv <- buttonAsView b
+            onClick bv (\_ -> fire ())
+            return bv
+    return (build, clicks)
+
+--- Stack children vertically.
+column :: [Widget] -> Widget
+column ws ctx = do
+    ll <- newLinearLayout ctx
+    setOrientation ll vertical
+    mapM_ (\w -> w ctx >>= addView ll) ws
+    layoutAsView ll
+
+--- Stack children horizontally.
+row :: [Widget] -> Widget
+row ws ctx = do
+    ll <- newLinearLayout ctx
+    setOrientation ll horizontal
+    mapM_ (\w -> w ctx >>= addView ll) ws
+    layoutAsView ll

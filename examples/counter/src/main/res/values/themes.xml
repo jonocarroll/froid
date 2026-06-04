@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- froid builds the view tree; the Activity theme is just a sane,
+         action-bar-less base. -->
+    <style name="Theme.Froid" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

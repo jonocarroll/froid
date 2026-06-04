@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # JDK 17 satisfies both the Frege source build (-source 1.8) and AGP 8.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Frege snapshot
+        id: frege-cache
+        uses: actions/cache@v4
+        with:
+          path: libs/frege-compiler-snapshot.jar
+          # Bump when tools/build-frege-snapshot.sh pins a new commit.
+          key: frege-067cad05
+
+      - name: Build Frege compiler from pinned master
+        if: steps.frege-cache.outputs.cache-hit != 'true'
+        run: tools/build-frege-snapshot.sh
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace

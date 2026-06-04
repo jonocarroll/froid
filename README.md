@@ -45,66 +45,6 @@ onCreate :: Activity -> IO ()
 onCreate this = runApp this counter
 ```
 
-No `findViewById`, no listeners by hand, no XML, no Kotlin. Buttons carry the
-`Msg` they dispatch; state evolves in one place (`update`).
-
-## The Elm Architecture (`froid.ui.App`)
-
-- `App { initial, update, view }` — your whole program.
-- `runApp :: Activity -> App model msg -> IO ()` — installs it.
-- Widgets: `text` / `dynText` / `headline` / `button` / `primaryButton` /
-  `flatButton` / `column` / `row` / `gap` / `flexSpacer`. `view` takes a
-  `Signal model`, so only the labels whose text changed are redrawn.
-
-## The FRP core (`froid.frp.Signal`)
-
-A small, discrete, push-based FRP — the natural Frege idiom for reactive UIs:
-
-- `Event a` — a stream of occurrences: `newEvent`, `fmap`, `never`, `mergeE`,
-  `filterE`, `snapshot`/`tag`.
-- `Signal a` — a value over time: `accumS` (Elm's `foldp`), `stepper`, `react`,
-  `fmap`. The accumulator is strict (no `foldl` leak); the UI thread is
-  single-threaded so cells need no locking.
-
-The Elm `App` layer funnels every `Msg` through one event, so app authors rarely
-touch these directly — they're there when you want raw reactive wiring.
-
-## How an Activity works (no glue in app code)
-
-A module becomes an Android Activity with one line, `native module type Activity
-where {}` — its generated class extends `froid.app.FregeActivity` (plain Java in
-the library), which bridges Android's `onCreate` to your
-`onCreate :: Activity -> IO ()`. The manifest points at the module class
-(e.g. `app.Counter`).
-
-## Repository layout
-
-```
-froid/                 the library (pure Frege + a tiny Java Activity base)
-  src/frege/froid/…      frp/Signal, ui/App, view, widget, content, app
-  src/main/java/…        froid.app.FregeActivity (the only Java; precompiled)
-froid-gradle-plugin/   the publishable Gradle plugin (id "io.github.mchav.froid"),
-                       included as a build; wires Frege compilation into AGP
-examples/
-  counter/             minimal counter
-  geoquiz/             GeoQuiz — true/false quiz with color-coded feedback
-libs/                  vendored Frege compiler snapshot
-```
-
-The top level holds no Android config — `android { … }` lives only in the module
-build files, not at the root.
-
-### Using froid in your own app
-
-```kotlin
-plugins {
-    id("com.android.application")
-    id("io.github.mchav.froid")          // wires Frege compilation
-}
-dependencies { implementation("io.github.mchav:froid:…") }
-// write your UI in src/frege/, point the manifest at your module class
-```
-
 ## Building
 
 ### 1. Build the Frege compiler (one-time)

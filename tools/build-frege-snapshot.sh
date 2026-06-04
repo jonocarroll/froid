@@ -28,6 +28,13 @@ BOOTSTRAP_JAR_URL="https://github.com/Frege/frege/releases/download/3.25alpha/fr
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$repo_root/libs/frege-compiler-snapshot.jar"
+
+# Idempotent: a fresh clone can run this unconditionally. Pass --force to rebuild.
+if [[ -f "$dest" && "${1:-}" != "--force" ]]; then
+  echo "==> $dest already present — nothing to do (pass --force to rebuild)."
+  exit 0
+fi
+
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 

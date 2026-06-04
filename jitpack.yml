@@ -1,0 +1,15 @@
+# JitPack build config. Tag a release (e.g. `v0.1.0`) and JitPack publishes:
+#   io.github.mchav:froid:<tag>                     (the library AAR)
+#   io.github.mchav.froid:froid-gradle-plugin:<tag> (the Gradle plugin)
+# under group com.github.<user>.froid — see the README "Consuming froid" section.
+jdk:
+  - openjdk17
+
+# The library build needs the vendored Frege jar. It's committed under libs/, but
+# this is a safety net: build it from source if a checkout lacks it (idempotent).
+before_install:
+  - ./tools/build-frege-snapshot.sh
+
+install:
+  - ./gradlew :froid:publishToMavenLocal -PfroidVersion=$VERSION
+  - ./gradlew -p froid-gradle-plugin publishToMavenLocal -Pversion=$VERSION

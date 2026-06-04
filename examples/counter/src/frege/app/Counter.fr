@@ -1,0 +1,27 @@
+{-
+    A counter, in froid's Elm-architecture API.
+-}
+module app.Counter where
+
+import froid.app.Activity
+import froid.ui.App
+import froid.frp.Signal
+
+native module type Activity where {}
+
+data Msg = Increment
+
+update :: Msg -> Int -> Int
+update Increment n = n + 1
+
+view :: Signal Int -> Ui Msg
+view model = column
+    [ dynText (fmap (\n -> "Count: " ++ show n) model)
+    , button "Increment" Increment
+    ]
+
+counter :: App Int Msg
+counter = App { initial = 0, update = update, view = view }
+
+onCreate :: Activity -> IO ()
+onCreate this = runApp this counter

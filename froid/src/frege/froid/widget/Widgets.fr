@@ -1,0 +1,88 @@
+{-
+    froid.widget.Widgets — thin handles over the common android.widget views.
+
+    With auto-FFI most instance methods (setText, addView, setOrientation, …)
+    need no declaration — they are generated on demand from the calls in the
+    UI layer. Constructors and the View upcasts are declared explicitly.
+-}
+module froid.widget.Widgets where
+
+import froid.content.Context
+import froid.view.View
+
+data TextViewN = native "RealWorld android.widget.TextView"
+type TextView = MutableIO TextViewN
+data ButtonN = native "RealWorld android.widget.Button"
+type Button = MutableIO ButtonN
+data LinearLayoutN = native "RealWorld android.widget.LinearLayout"
+type LinearLayout = MutableIO LinearLayoutN
+
+native newTextView     new :: Context -> IO TextView
+native newButton       new :: Context -> IO Button
+native newLinearLayout new :: Context -> IO LinearLayout
+
+native setText :: TextView -> String -> IO ()
+             |  Button   -> String -> IO ()
+native setTextSize    :: TextView -> Float -> IO ()
+native setOrientation :: LinearLayout -> Int -> IO ()
+native setGravity     :: LinearLayout -> Int -> IO ()
+native setPadding     :: LinearLayout -> Int -> Int -> Int -> Int -> IO ()
+native addView        :: LinearLayout -> View -> IO ()
+
+pure native horizontal    "android.widget.LinearLayout.HORIZONTAL" :: Int
+pure native vertical      "android.widget.LinearLayout.VERTICAL"   :: Int
+pure native gravityCenter "android.view.Gravity.CENTER_HORIZONTAL" :: Int
+pure native gravityCenterAll "android.view.Gravity.CENTER"         :: Int
+
+-- Text styling.
+native setTextColor   :: TextView -> Int -> IO ()
+native setTextGravity "setGravity" :: TextView -> Int -> IO ()
+native setMaxWidth    :: TextView -> Int -> IO ()
+native setTypeface    :: TextView -> Typeface -> IO ()
+
+data Typeface = pure native "android.graphics.Typeface"
+pure native typefaceBold "android.graphics.Typeface.DEFAULT_BOLD" :: Typeface
+
+-- LayoutParams: width/height/weight + margins (the core of real layout).
+data LayoutParamsN = native "RealWorld android.widget.LinearLayout.LayoutParams"
+type LayoutParams = MutableIO LayoutParamsN
+native newLayoutParams         "new android.widget.LinearLayout.LayoutParams" :: Int -> Int -> IO LayoutParams
+native newWeightedLayoutParams "new android.widget.LinearLayout.LayoutParams" :: Int -> Int -> Float -> IO LayoutParams
+native setMargins      :: LayoutParams -> Int -> Int -> Int -> Int -> IO ()
+native setLayoutParams :: View -> LayoutParams -> IO ()
+pure native matchParent "android.view.ViewGroup.LayoutParams.MATCH_PARENT" :: Int
+pure native wrapContent "android.view.ViewGroup.LayoutParams.WRAP_CONTENT" :: Int
+
+-- An empty View, used as a weighted spacer.
+native newView "new android.view.View" :: Context -> IO View
+native setBackgroundColor :: View -> Int -> IO ()
+pure native parseColor "android.graphics.Color.parseColor" :: String -> Int
+
+-- Button styling + drawables (primary/secondary buttons).
+native btnSetAllCaps    "setAllCaps"       :: Button -> Bool     -> IO ()
+native btnSetTypeface   "setTypeface"      :: Button -> Typeface -> IO ()
+native btnSetTextColor  "setTextColor"     :: Button -> Int      -> IO ()
+native btnSetMinHeight  "setMinimumHeight" :: Button -> Int      -> IO ()
+native btnSetBackground "setBackground"    :: Button -> GradientDrawable -> IO ()
+
+data GradientDrawableN = native "RealWorld android.graphics.drawable.GradientDrawable"
+type GradientDrawable = MutableIO GradientDrawableN
+native newGradientDrawable "new android.graphics.drawable.GradientDrawable" :: () -> IO GradientDrawable
+native gdSetColor        "setColor"        :: GradientDrawable -> Int   -> IO ()
+native gdSetCornerRadius "setCornerRadius" :: GradientDrawable -> Float -> IO ()
+native gdSetStroke       "setStroke"       :: GradientDrawable -> Int -> Int -> IO ()
+
+-- dp -> px (so spacing is density-independent).
+data ResourcesN = native "android.content.res.Resources"
+type Resources = MutableIO ResourcesN
+data DisplayMetricsN = native "android.util.DisplayMetrics"
+type DisplayMetrics = MutableIO DisplayMetricsN
+native getResources      :: Context -> IO Resources
+native getDisplayMetrics :: Resources -> IO DisplayMetrics
+native applyDimension "android.util.TypedValue.applyDimension" :: Int -> Float -> DisplayMetrics -> IO Float
+pure native complexUnitDip "android.util.TypedValue.COMPLEX_UNIT_DIP" :: Int
+
+-- Safe upcasts to View (every widget is-a View).
+native textViewAsView "(android.view.View)" :: TextView     -> IO View
+native buttonAsView   "(android.view.View)" :: Button       -> IO View
+native layoutAsView   "(android.view.View)" :: LinearLayout -> IO View

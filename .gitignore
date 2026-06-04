@@ -1,3 +1,21 @@
-build/*
-lib/*
+# Gradle / build outputs (any depth: froid/, examples/*/, froid-gradle-plugin/)
+**/build/
+**/.gradle/
+.gradle/
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+captures/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jars are ignored by default, EXCEPT the vendored Frege snapshot + the wrapper.
 *.jar
+!libs/frege-compiler-snapshot.jar
+!gradle/wrapper/gradle-wrapper.jar

@@ -1,0 +1,95 @@
+{-
+    froid.frp.Signal — a small discrete, push-based FRP core.
+
+    Two types:
+      * Event a  — a stream of occurrences you can subscribe to.
+      * Signal a — a value that changes over time (sample the current value,
+                   or subscribe to changes).
+
+    This is the foundation of froid's declarative widget layer (froid.ui.Widget):
+    button clicks are Events, widget contents are Signals. Single-threaded (the
+    Android UI thread), so cells are a plain native holder — no locking.
+-}
+module froid.frp.Signal where
+
+-- A mutable cell, backed by a java.util.concurrent.atomic.AtomicReference.
+data Cell a = pure native "java.util.concurrent.atomic.AtomicReference"
+native newCell   new :: a -> IO (Cell a)
+native readCell  get :: Cell a -> IO a
+native writeCell set :: Cell a -> a -> IO ()
+
+--- A stream of occurrences. Subscribe a handler to be run on each one.
+data Event a = Event { subscribeTo :: (a -> IO ()) -> IO () }
+
+--- A time-varying value: read the current value, and observe changes.
+data Signal a = Signal { sample :: IO a, changes :: Event a }
+
+instance Functor Event where
+    fmap f (Event s) = Event (\h -> s (\a -> h (f a)))
+
+instance Functor Signal where
+    fmap f (Signal smp chs) = Signal (fmap f smp) (fmap f chs)
+
+--- An event that never fires.
+never :: Event a
+never = Event (const (return ()))
+
+--- Merge two event streams: the result fires on each occurrence of either.
+mergeE :: Event a -> Event a -> Event a
+mergeE (Event s1) (Event s2) = Event (\h -> do { s1 h; s2 h })
+
+--- Merge a list of event streams.
+mergeAll :: [Event a] -> Event a
+mergeAll = fold mergeE never
+
+--- Keep only the occurrences satisfying the predicate.
+filterE :: (a -> Bool) -> Event a -> Event a
+filterE p (Event sub) = Event (\h -> sub (\a -> if p a then h a else return ()))
+
+--- Sample a Signal's current value at each Event occurrence, combining the two.
+--- (reflex's `attachWith`.) Use it to read state when a button is pressed.
+snapshot :: (a -> b -> c) -> Event a -> Signal b -> Event c
+snapshot f (Event sub) sig = Event (\h -> sub (\a -> do { b <- sig.sample; h (f a b) }))
+
+--- Sample a Signal at each Event occurrence, discarding the event's own value.
+tag :: Signal b -> Event a -> Event b
+tag sig ev = snapshot (\_ b -> b) ev sig
+
+--- Create an event source: an Event together with a function that fires it.
+newEvent :: IO (Event a, a -> IO ())
+newEvent = do
+    subs <- newCell []
+    -- Append on subscribe (rare) so `fire` (frequent) needs no per-emission reverse.
+    let subscribe h = do
+            hs <- readCell subs
+            writeCell subs (hs ++ [h])
+    let fire a = do
+            hs <- readCell subs
+            mapM_ (\h -> h a) hs
+    return (Event subscribe, fire)
+
+--- Fold an event stream into a Signal (the Elm `foldp`): each occurrence is a
+--- state transition applied to the running value.
+accumS :: b -> Event (b -> b) -> IO (Signal b)
+accumS initial ev = do
+    cell <- newCell initial
+    (changed, fireChanged) <- newEvent
+    ev.subscribeTo (\f -> do
+        old <- readCell cell
+        let new = f old
+        -- Force the accumulator strictly: otherwise the cell stores a growing
+        -- thunk chain f_n (… (f_0 initial)) — a foldl space leak.
+        writeCell cell $! new
+        fireChanged new)
+    return (Signal (readCell cell) changed)
+
+--- A Signal that always holds the most recent event value.
+stepper :: a -> Event a -> IO (Signal a)
+stepper initial ev = accumS initial (fmap const ev)
+
+--- Run a handler with the current value immediately, then on every change.
+react :: Signal a -> (a -> IO ()) -> IO ()
+react sig h = do
+    v <- sig.sample
+    h v
+    sig.changes.subscribeTo h

@@ -1,0 +1,44 @@
+{-
+    froid.view.View — the android.view.View handle and click wiring.
+
+    `data XN = native "RealWorld …"` declares the Java handle (so auto-FFI can
+    generate method bindings on demand); `type X = MutableIO XN` gives the clean
+    name used in signatures. The OnClickListener bridge is plain Java in a native
+    module (the original froid style) — no Kotlin.
+-}
+module froid.view.View where
+
+data ViewN = native "RealWorld android.view.View"
+type View = MutableIO ViewN
+
+data OnClickListenerN = native "RealWorld android.view.View.OnClickListener"
+type OnClickListener = MutableIO OnClickListenerN
+
+native setOnClickListener :: View -> OnClickListener -> IO ()
+native mkOnClickListener "froid.view.View.onClickHandler" :: (View -> IO ()) -> IO OnClickListener
+
+pure native visible   "android.view.View.VISIBLE"   :: Int
+pure native invisible "android.view.View.INVISIBLE" :: Int
+pure native gone      "android.view.View.GONE"      :: Int
+
+native setVisibility :: View -> Int -> IO ()
+
+--- Run a Frege handler when the view is clicked.
+onClick :: View -> (View -> IO ()) -> IO ()
+onClick v handler = do
+    listener <- mkOnClickListener handler
+    setOnClickListener v listener
+
+native module where {
+    public static android.view.View.OnClickListener
+            onClickHandler(final frege.run8.Func.U handler) {
+        return new android.view.View.OnClickListener() {
+            @Override
+            public void onClick(android.view.View view) {
+                frege.prelude.PreludeBase.TST.performUnsafe(
+                    (frege.run8.Func.U)(handler.apply(frege.run8.Thunk.lazy(view)).call())
+                ).call();
+            }
+        };
+    }
+}

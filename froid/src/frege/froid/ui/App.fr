@@ -1,0 +1,195 @@
+{-
+    froid.ui.App — the Elm Architecture for froid.
+
+    You give an `App` an initial model, a pure `update :: msg -> model -> model`,
+    and a `view :: Signal model -> Ui msg`. Buttons are placed where they belong
+    and carry the message they dispatch. State lives in one place (`update`).
+    Built on froid.frp.Signal: the model is a `Signal`, so only the labels whose
+    text actually changed are redrawn.
+-}
+module froid.ui.App where
+
+import froid.frp.Signal
+import froid.app.Activity
+import froid.view.View
+import froid.content.Context
+import froid.widget.Widgets
+
+--- A piece of UI: given a Context and a way to dispatch messages, build a View.
+data Ui msg = Ui { build :: Context -> (msg -> IO ()) -> IO View }
+
+--- The Elm Architecture.
+data App model msg = App
+    { initial :: model
+    , update  :: msg -> model -> model
+    , view    :: Signal model -> Ui msg
+    }
+
+--- Run an App as the content of an Activity.
+runApp :: Activity -> App model msg -> IO ()
+runApp activity app = do
+    (messages, dispatch) <- newEvent
+    model    <- accumS app.initial (fmap app.update messages)
+    ctx      <- getApplicationContext activity
+    rootView <- (app.view model).build ctx dispatch
+    setContentView activity rootView
+
+--- Convert dp to px for the current screen density.
+dp :: Context -> Int -> IO Int
+dp ctx n = do
+    res <- getResources ctx
+    m   <- getDisplayMetrics res
+    px  <- applyDimension complexUnitDip (fromIntegral n) m
+    return px.int
+
+bodyTextSize :: Float
+bodyTextSize = 18.0
+
+headlineTextSize :: Float
+headlineTextSize = 26.0
+
+--- A bold, centered headline that wraps nicely — for the main question.
+headline :: Signal String -> Ui msg
+headline sig = Ui (\ctx -> \_ -> do
+    tv <- newTextView ctx
+    setTextSize tv headlineTextSize
+    setTypeface tv typefaceBold
+    setTextColor tv (parseColor "#202124")
+    setTextGravity tv gravityCenterAll
+    maxW <- dp ctx 320
+    setMaxWidth tv maxW
+    bindText tv sig
+    textViewAsView tv)
+
+--- Static text.
+text :: String -> Ui msg
+text s = Ui (\ctx -> \_ -> do
+    tv <- newTextView ctx
+    setTextSize tv bodyTextSize
+    setTextGravity tv gravityCenterAll
+    setText tv s
+    textViewAsView tv)
+
+--- Text bound to a Signal; redraws only when the string changes.
+dynText :: Signal String -> Ui msg
+dynText sig = Ui (\ctx -> \_ -> do
+    tv <- newTextView ctx
+    setTextSize tv bodyTextSize
+    setTextGravity tv gravityCenterAll
+    bindText tv sig
+    textViewAsView tv)
+
+--- Bold dynamic text whose colour also tracks the signal (text, "#RRGGBB").
+dynColoredText :: Signal (String, String) -> Ui msg
+dynColoredText sig = Ui (\ctx -> \_ -> do
+    tv <- newTextView ctx
+    setTextSize tv bodyTextSize
+    setTypeface tv typefaceBold
+    setTextGravity tv gravityCenterAll
+    react sig (\(s, hex) -> do
+        setText tv s
+        setTextColor tv (parseColor hex))
+    textViewAsView tv)
+
+-- distinct-until-changed setText
+private bindText tv sig = do
+    seen <- newCell Nothing
+    react sig (\s -> do
+        prev <- readCell seen
+        if prev == Just s
+            then return ()
+            else do
+                writeCell seen (Just s)
+                setText tv s)
+
+--- A plain button that dispatches `msg` when pressed.
+button :: String -> msg -> Ui msg
+button lbl msg = Ui (\ctx -> \dispatch -> do
+    b  <- newButton ctx
+    setText b lbl
+    bv <- buttonAsView b
+    onClick bv (\_ -> dispatch msg)
+    return bv)
+
+-- shared button wiring: build, label, min-height, click → dispatch.
+private mkButton ctx dispatch lbl msg minDp = do
+    b <- newButton ctx
+    setText b lbl
+    btnSetAllCaps b false
+    mh <- dp ctx minDp
+    btnSetMinHeight b mh
+    bv <- buttonAsView b
+    onClick bv (\_ -> dispatch msg)
+    return (b, bv)
+
+--- A filled, primary action button (for the main choices).
+primaryButton :: String -> msg -> Ui msg
+primaryButton lbl msg = Ui (\ctx -> \dispatch -> do
+    (b, bv) <- mkButton ctx dispatch lbl msg 56
+    btnSetTypeface b typefaceBold
+    btnSetTextColor b (parseColor "#FFFFFF")
+    r  <- dp ctx 12
+    bg <- newGradientDrawable ()
+    gdSetColor bg (parseColor "#1565C0")
+    gdSetCornerRadius bg (fromIntegral r)
+    btnSetBackground b bg
+    return bv)
+
+--- A flat, outlined, secondary button (for navigation).
+flatButton :: String -> msg -> Ui msg
+flatButton lbl msg = Ui (\ctx -> \dispatch -> do
+    (b, bv) <- mkButton ctx dispatch lbl msg 48
+    btnSetTextColor b (parseColor "#1565C0")
+    r  <- dp ctx 12
+    sw <- dp ctx 1
+    bg <- newGradientDrawable ()
+    gdSetColor bg (parseColor "#00FFFFFF")     -- transparent fill
+    gdSetStroke bg sw (parseColor "#D0D0D0")
+    gdSetCornerRadius bg (fromIntegral r)
+    btnSetBackground b bg
+    return bv)
+
+--- A flexible spacer that expands to push following content away (e.g. nav to the bottom).
+flexSpacer :: Ui msg
+flexSpacer = Ui (\ctx -> \_ -> do
+    v  <- newView ctx
+    lp <- newWeightedLayoutParams matchParent 0 1.0
+    setLayoutParams v lp
+    return v)
+
+--- Empty vertical space of `n` dp.
+gap :: Int -> Ui msg
+gap n = Ui (\ctx -> \_ -> do
+    v  <- newView ctx
+    h  <- dp ctx n
+    lp <- newLayoutParams matchParent h
+    setLayoutParams v lp
+    return v)
+
+--- The screen root: fills the screen, content vertically centred, padded.
+column :: [Ui msg] -> Ui msg
+column children = Ui (\ctx -> \dispatch -> do
+    ll  <- newLinearLayout ctx
+    setOrientation ll vertical
+    setGravity ll gravityCenterAll
+    pad <- dp ctx 24
+    setPadding ll pad pad pad pad
+    mapM_ (\child -> child.build ctx dispatch >>= addView ll) children
+    layoutAsView ll)
+
+--- Horizontal row with equal-width children and an even gap between them.
+row :: [Ui msg] -> Ui msg
+row children = Ui (\ctx -> \dispatch -> do
+    ll <- newLinearLayout ctx
+    setOrientation ll horizontal
+    g  <- dp ctx 6
+    mapM_ (\child -> do
+        v  <- child.build ctx dispatch
+        lp <- newWeightedLayoutParams 0 wrapContent 1.0
+        setMargins lp g 0 g 0
+        setLayoutParams v lp
+        addView ll v) children
+    rv  <- layoutAsView ll
+    rlp <- newLayoutParams matchParent wrapContent
+    setLayoutParams rv rlp
+    return rv)
